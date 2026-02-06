@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phantom AI - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Inter', sans-serif; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .status-green { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+        .status-yellow { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+        .status-red { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+        .glass {
+            background: rgba(17, 24, 39, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .pulse-ring {
+            animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.8; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <!-- Header -->
+    <header class="glass sticky top-0 z-50 border-b border-gray-800">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="relative">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center">
+                        <span class="text-xl">🎭</span>
+                    </div>
+                    <div class="absolute inset-0 rounded-xl bg-purple-500 pulse-ring"></div>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
+                        Phantom AI
+                    </h1>
+                    <p class="text-xs text-gray-400">Adaptive Web Crawler v1.0</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-800 border border-gray-700">
+                    <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                    <span class="text-xs text-gray-300 mono">API:4000</span>
+                </div>
+                <div id="mcp-status" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-800 border border-gray-700">
+                    <div class="w-2 h-2 rounded-full bg-yellow-500"></div>
+                    <span class="text-xs text-gray-300 mono">MCP:...</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        <!-- Status Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div class="glass rounded-xl p-4">
+                <p class="text-gray-400 text-xs mb-1">Total Targets</p>
+                <p id="total-targets" class="text-3xl font-bold text-white mono">-</p>
+            </div>
+            <div class="glass rounded-xl p-4">
+                <p class="text-gray-400 text-xs mb-1">Active Crawls</p>
+                <p id="active-crawls" class="text-3xl font-bold text-green-400 mono">-</p>
+            </div>
+            <div class="glass rounded-xl p-4">
+                <p class="text-gray-400 text-xs mb-1">Green Light</p>
+                <p id="green-lights" class="text-3xl font-bold text-emerald-400 mono">-</p>
+            </div>
+            <div class="glass rounded-xl p-4">
+                <p class="text-gray-400 text-xs mb-1">MCP Model</p>
+                <p id="mcp-model" class="text-sm font-bold text-purple-400 mono truncate">-</p>
+            </div>
+        </div>
+
+        <!-- Add Target -->
+        <div class="glass rounded-xl p-6 mb-8">
+            <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                <span>➕</span> Add New Target
+            </h2>
+            <div class="flex gap-3">
+                <input 
+                    type="text" 
+                    id="target-url" 
+                    placeholder="https://example.com"
+                    class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                >
+                <select id="target-type" class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500">
+                    <option value="web">Web</option>
+                    <option value="api">API</option>
+                    <option value="mobile">Mobile</option>
+                </select>
+                <button onclick="addTarget()" class="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-all">
+                    Add Target
+                </button>
+            </div>
+        </div>
+
+        <!-- Targets List -->
+        <div class="glass rounded-xl overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+                <h2 class="text-lg font-semibold flex items-center gap-2">
+                    <span>🎯</span> Targets
+                </h2>
+                <button onclick="loadTargets()" class="text-sm text-purple-400 hover:text-purple-300">
+                    Refresh
+                </button>
+            </div>
+            <div id="targets-list" class="divide-y divide-gray-800">
+                <div class="px-6 py-12 text-center text-gray-500">
+                    Loading targets...
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API_URL = 'http://localhost:4000';
+        
+        async function checkHealth() {
+            try {
+                const res = await fetch(`${API_URL}/health`);
+                const data = await res.json();
+                
+                if (data.mcp) {
+                    document.getElementById('mcp-model').textContent = data.mcp.model.split('-')[2] || data.mcp.model;
+                    const mcpStatus = document.getElementById('mcp-status');
+                    if (data.mcp.configured) {
+                        mcpStatus.innerHTML = `<div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div><span class="text-xs text-gray-300 mono">MCP:ON</span>`;
+                    } else {
+                        mcpStatus.innerHTML = `<div class="w-2 h-2 rounded-full bg-yellow-500"></div><span class="text-xs text-gray-300 mono">MCP:MOCK</span>`;
+                    }
+                }
+            } catch (e) {
+                console.error('Health check failed:', e);
+                document.getElementById('mcp-status').innerHTML = `<div class="w-2 h-2 rounded-full bg-red-500"></div><span class="text-xs text-gray-300 mono">MCP:ERR</span>`;
+            }
+        }
+
+        async function loadTargets() {
+            try {
+                const res = await fetch(`${API_URL}/api/targets`);
+                const targets = await res.json();
+                
+                document.getElementById('total-targets').textContent = targets.length;
+                document.getElementById('active-crawls').textContent = targets.filter(t => t.status === 'learning').length;
+                document.getElementById('green-lights').textContent = targets.filter(t => t.greenLightStatus === 'GREEN' || t.greenLightStatus === 'ESTABLISHED').length;
+                
+                const list = document.getElementById('targets-list');
+                if (targets.length === 0) {
+                    list.innerHTML = `
+                        <div class="px-6 py-12 text-center text-gray-500">
+                            <p class="text-4xl mb-4">👻</p>
+                            <p>No targets yet. Add one above!</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                list.innerHTML = targets.map(t => {
+                    const statusColors = {
+                        'RED': 'status-red',
+                        'YELLOW': 'status-yellow',
+                        'GREEN': 'status-green',
+                        'ESTABLISHED': 'status-green'
+                    };
+                    return `
+                        <div class="px-6 py-4 flex items-center justify-between hover:bg-gray-800/50 transition-colors">
+                            <div class="flex items-center gap-4">
+                                <div class="w-3 h-3 rounded-full ${statusColors[t.greenLightStatus] || 'bg-gray-500'}"></div>
+                                <div>
+                                    <p class="font-medium text-white">${t.url}</p>
+                                    <p class="text-xs text-gray-500 mono">${t.id} • ${t.status}</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-4">
+                                <div class="text-right">
+                                    <p class="text-sm font-medium text-white">${t.trustScore}%</p>
+                                    <p class="text-xs text-gray-500">Trust Score</p>
+                                </div>
+                                <span class="px-3 py-1 rounded-full text-xs font-medium ${t.greenLightStatus === 'ESTABLISHED' ? 'bg-green-500/20 text-green-400' : 'bg-gray-700 text-gray-400'}">
+                                    ${t.greenLightStatus}
+                                </span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (e) {
+                console.error('Failed to load targets:', e);
+                document.getElementById('targets-list').innerHTML = `
+                    <div class="px-6 py-12 text-center text-red-400">
+                        <p>Failed to load targets</p>
+                        <p class="text-sm text-gray-500 mt-2">${e.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        async function addTarget() {
+            const url = document.getElementById('target-url').value;
+            const type = document.getElementById('target-type').value;
+            
+            if (!url) return alert('Please enter a URL');
+            
+            try {
+                const res = await fetch(`${API_URL}/api/targets`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url, type })
+                });
+                
+                if (res.ok) {
+                    document.getElementById('target-url').value = '';
+                    loadTargets();
+                } else {
+                    const err = await res.json();
+                    alert('Error: ' + (err.error || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        // Initial load
+        checkHealth();
+        loadTargets();
+        
+        // Refresh every 5 seconds
+        setInterval(() => {
+            checkHealth();
+            loadTargets();
+        }, 5000);
+    </script>
+</body>
+</html>
+

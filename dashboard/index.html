@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phantom AI - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Inter', sans-serif; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .glass {
+            background: rgba(17, 24, 39, 0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .pulse-ring {
+            animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.8; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+        .gradient-text {
+            background: linear-gradient(135deg, #a78bfa 0%, #60a5fa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen">
+    <!-- Header -->
+    <header class="glass sticky top-0 z-50 border-b border-gray-800">
+        <div class="max-w-7xl mx-auto px-4 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="relative">
+                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center">
+                            <span class="text-xl">🎭</span>
+                        </div>
+                        <div class="absolute inset-0 rounded-xl bg-purple-500 pulse-ring opacity-50"></div>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold gradient-text">Phantom AI</h1>
+                        <p class="text-xs text-gray-500">Adaptive Web Crawler</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div id="api-status" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-900 border border-gray-800">
+                        <div class="w-2 h-2 rounded-full bg-gray-500"></div>
+                        <span class="text-xs text-gray-400 mono">API</span>
+                    </div>
+                    <div id="mcp-status" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-900 border border-gray-800">
+                        <div class="w-2 h-2 rounded-full bg-gray-500"></div>
+                        <span class="text-xs text-gray-400 mono">MCP</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        <!-- Stats -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div class="glass rounded-xl p-4">
+                <p class="text-gray-500 text-xs mb-1 uppercase tracking-wider">Targets</p>
+                <p id="stat-targets" class="text-2xl font-bold text-white mono">0</p>
+            </div>
+            <div class="glass rounded-xl p-4">
+                <p class="text-gray-500 text-xs mb-1 uppercase tracking-wider">Active</p>
+                <p id="stat-active" class="text-2xl font-bold text-green-400 mono">0</p>
+            </div>
+            <div class="glass rounded-xl p-4">
+                <p class="text-gray-500 text-xs mb-1 uppercase tracking-wider">Green Light</p>
+                <p id="stat-green" class="text-2xl font-bold text-emerald-400 mono">0</p>
+            </div>
+            <div class="glass rounded-xl p-4">
+                <p class="text-gray-500 text-xs mb-1 uppercase tracking-wider">MCP</p>
+                <p id="stat-mcp" class="text-sm font-medium text-purple-400 mono truncate">-</p>
+            </div>
+        </div>
+
+        <!-- Add Target -->
+        <div class="glass rounded-xl p-6 mb-8">
+            <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                <span class="text-purple-400">➕</span> New Target
+            </h2>
+            <form id="add-target-form" class="flex gap-3">
+                <input 
+                    type="url" 
+                    id="target-url" 
+                    placeholder="https://example.com"
+                    required
+                    class="flex-1 bg-gray-900 border border-gray-800 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50"
+                >
+                <select id="target-type" class="bg-gray-900 border border-gray-800 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500">
+                    <option value="web">Web</option>
+                    <option value="api">API</option>
+                    <option value="mobile">Mobile</option>
+                </select>
+                <button type="submit" class="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-all">
+                    Add
+                </button>
+            </form>
+        </div>
+
+        <!-- Targets -->
+        <div class="glass rounded-xl overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+                <h2 class="text-lg font-semibold flex items-center gap-2">
+                    <span class="text-purple-400">🎯</span> Targets
+                </h2>
+                <button onclick="loadTargets()" class="text-sm text-purple-400 hover:text-purple-300 transition-colors">
+                    ↻ Refresh
+                </button>
+            </div>
+            <div id="targets-list" class="divide-y divide-gray-800/50">
+                <div class="px-6 py-12 text-center text-gray-500">
+                    <div class="animate-pulse flex flex-col items-center">
+                        <div class="w-12 h-12 rounded-full bg-gray-800 mb-4"></div>
+                        <div class="h-4 w-32 bg-gray-800 rounded"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Auto-detect API URL (works with proxy)
+        const API_URL = window.location.origin;
+        
+        async function checkHealth() {
+            try {
+                const res = await fetch('/health');
+                const data = await res.json();
+                
+                // API status
+                const apiStatus = document.getElementById('api-status');
+                apiStatus.innerHTML = `<div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div><span class="text-xs text-gray-300 mono">API:ON</span>`;
+                apiStatus.classList.add('border-green-500/30');
+                
+                // MCP status
+                const mcpStatus = document.getElementById('mcp-status');
+                if (data.mcp?.configured) {
+                    mcpStatus.innerHTML = `<div class="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></div><span class="text-xs text-gray-300 mono">MCP:ON</span>`;
+                    mcpStatus.classList.add('border-purple-500/30');
+                    document.getElementById('stat-mcp').textContent = data.mcp.model.split('-').slice(2, 4).join('-');
+                } else {
+                    mcpStatus.innerHTML = `<div class="w-2 h-2 rounded-full bg-yellow-500"></div><span class="text-xs text-gray-300 mono">MCP:MOCK</span>`;
+                    mcpStatus.classList.add('border-yellow-500/30');
+                }
+            } catch (e) {
+                document.getElementById('api-status').innerHTML = `<div class="w-2 h-2 rounded-full bg-red-500"></div><span class="text-xs text-gray-300 mono">API:ERR</span>`;
+            }
+        }
+
+        function getStatusColor(status) {
+            return {
+                'RED': 'bg-red-500',
+                'YELLOW': 'bg-yellow-500',
+                'GREEN': 'bg-green-500',
+                'ESTABLISHED': 'bg-emerald-500'
+            }[status] || 'bg-gray-500';
+        }
+
+        function getStatusBg(status) {
+            return {
+                'ESTABLISHED': 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+                'GREEN': 'bg-green-500/10 text-green-400 border-green-500/20'
+            }[status] || 'bg-gray-800 text-gray-400 border-gray-700';
+        }
+
+        async function loadTargets() {
+            try {
+                const res = await fetch('/api/targets');
+                const targets = await res.json();
+                
+                // Update stats
+                document.getElementById('stat-targets').textContent = targets.length;
+                document.getElementById('stat-active').textContent = targets.filter(t => t.status === 'learning').length;
+                document.getElementById('stat-green').textContent = targets.filter(t => 
+                    t.greenLightStatus === 'GREEN' || t.greenLightStatus === 'ESTABLISHED'
+                ).length;
+                
+                const list = document.getElementById('targets-list');
+                if (targets.length === 0) {
+                    list.innerHTML = `
+                        <div class="px-6 py-16 text-center text-gray-500">
+                            <p class="text-4xl mb-4 opacity-50">👻</p>
+                            <p class="mb-2">No targets yet</p>
+                            <p class="text-sm text-gray-600">Add your first target above</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                list.innerHTML = targets.map(t => `
+                    <div class="px-6 py-4 flex items-center justify-between hover:bg-gray-800/30 transition-colors group">
+                        <div class="flex items-center gap-4">
+                            <div class="w-2.5 h-2.5 rounded-full ${getStatusColor(t.greenLightStatus)} ring-2 ring-gray-800"></div>
+                            <div>
+                                <p class="font-medium text-white group-hover:text-purple-400 transition-colors">${t.url}</p>
+                                <p class="text-xs text-gray-600 mono">${t.id.slice(0, 8)}... • ${t.status}</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <div class="text-right">
+                                <p class="text-sm font-medium text-white">${t.trustScore}%</p>
+                                <p class="text-xs text-gray-600">trust</p>
+                            </div>
+                            <span class="px-3 py-1 rounded-full text-xs font-medium border ${getStatusBg(t.greenLightStatus)}">
+                                ${t.greenLightStatus}
+                            </span>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                document.getElementById('targets-list').innerHTML = `
+                    <div class="px-6 py-12 text-center text-red-400">
+                        <p>Failed to load targets</p>
+                        <p class="text-sm text-gray-600 mt-2">${e.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        document.getElementById('add-target-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const url = document.getElementById('target-url').value;
+            const type = document.getElementById('target-type').value;
+            
+            try {
+                const res = await fetch('/api/targets', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url, type })
+                });
+                
+                if (res.ok) {
+                    document.getElementById('target-url').value = '';
+                    loadTargets();
+                } else {
+                    const err = await res.json();
+                    alert('Error: ' + (err.error || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        });
+
+        // Init
+        checkHealth();
+        loadTargets();
+        setInterval(() => { checkHealth(); loadTargets(); }, 5000);
+    </script>
+</body>
+</html>
+

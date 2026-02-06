@@ -1,0 +1,116 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Target {
+  id                String    @id @default(uuid())
+  url               String
+  type              String    @default("web")
+  status            String    @default("discovering")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  lastSeen          DateTime?
+  
+  greenLightStatus  String    @default("RED")
+  trustScore        Int       @default(0)
+  establishedAt     DateTime?
+  maintainedFor     Int       @default(0)
+  
+  currentDnaId      String?
+  currentDna        DnaSnapshot? @relation("CurrentDNA", fields: [currentDnaId], references: [id])
+  
+  dnaSnapshots      DnaSnapshot[]
+  learningEvents    LearningEvent[]
+  greenLightHistory GreenLightState[]
+  requestLogs       RequestLog[]
+  
+  @@index([url])
+  @@index([status])
+}
+
+model DnaSnapshot {
+  id          String   @id @default(uuid())
+  targetId    String
+  target      Target   @relation(fields: [targetId], references: [id])
+  version     String   @default("1.0.0")
+  dnaJson     String
+  parentId    String?
+  parent      DnaSnapshot? @relation("DNALineage", fields: [parentId], references: [id])
+  children    DnaSnapshot[] @relation("DNALineage")
+  isActive    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  currentFor  Target[] @relation("CurrentDNA")
+  events      LearningEvent[]
+  requests    RequestLog[]
+  
+  @@index([targetId])
+}
+
+model LearningEvent {
+  id            String   @id @default(uuid())
+  targetId      String
+  target        Target   @relation(fields: [targetId], references: [id])
+  dnaVersionId  String
+  dnaVersion    DnaSnapshot @relation(fields: [dnaVersionId], references: [id])
+  eventType     String
+  title         String
+  description   String
+  mcpInsight    String?
+  mcpConfidence Float?
+  mcpModel      String   @default("claude-4-5-sonnet")
+  dnaChanges    String?
+  beforeState   String?
+  afterState    String?
+  trustImpact   Int      @default(0)
+  durationMs    Int?
+  challengeType String?
+  challengeSolved Boolean?
+  createdAt     DateTime @default(now())
+  
+  @@index([targetId])
+}
+
+model GreenLightState {
+  id            String   @id @default(uuid())
+  targetId      String
+  target        Target   @relation(fields: [targetId], references: [id])
+  status        String
+  trustScore    Int
+  signalsJson   String
+  establishedAt DateTime?
+  maintainedFor Int       @default(0)
+  lostAt        DateTime?
+  reasonLost    String?
+  createdAt     DateTime @default(now())
+  
+  @@index([targetId])
+}
+
+model RequestLog {
+  id                  String   @id @default(uuid())
+  targetId            String
+  target              Target   @relation(fields: [targetId], references: [id])
+  dnaVersionId        String?
+  dnaVersion          DnaSnapshot? @relation(fields: [dnaVersionId], references: [id])
+  method              String
+  url                 String
+  headers             String
+  body                String?
+  responseStatus      Int?
+  responseHeaders     String?
+  responseBodyPreview String?
+  wasBlocked          Boolean  @default(false)
+  blockReason         String?
+  challengeDetected   Boolean  @default(false)
+  challengeType       String?
+  timingMs            Int?
+  createdAt           DateTime @default(now())
+  
+  @@index([targetId])
+}
+

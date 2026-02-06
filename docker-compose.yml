@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: phantom-ai-db
+    environment:
+      POSTGRES_USER: phantom
+      POSTGRES_PASSWORD: phantom_secure_2024
+      POSTGRES_DB: phantom_ai
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./apps/server/prisma/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U phantom -d phantom_ai"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: phantom-ai-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Optional: Playwright browser pool
+  browser:
+    image: mcr.microsoft.com/playwright:v1.40.0-jammy
+    container_name: phantom-ai-browser
+    environment:
+      - DISPLAY=:99
+    ports:
+      - "9222:9222"
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    command: ["npx", "playwright", "run-server", "--port", "9222"]
+
+volumes:
+  postgres_data:
+  redis_data:

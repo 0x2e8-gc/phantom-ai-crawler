@@ -1,0 +1,48 @@
+# Source
+src/
+tsconfig.json
+
+# Node modules
+node_modules/
+
+# Database
+*.db
+*.db-journal
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build process
+.nyc_output/
+coverage/
+
+# Temp files
+.tmp/
+.temp/
+*.tmp
+
+# Git
+.git/
+.gitignore
+
+# Tests
+tests/
+__tests__/
+*.test.ts
+*.spec.ts
+
