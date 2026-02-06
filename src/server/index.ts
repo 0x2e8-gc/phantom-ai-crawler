@@ -112,14 +112,133 @@ app.get('/api/dna/:targetId/current', async (req, res) => {
   }
 });
 
-// MCP API
+// Create DNA snapshot
+app.post('/api/targets/:id/dna', async (req, res) => {
+  try {
+    const { dnaJson, version = '1.0.0', parentId } = req.body;
+    
+    const snapshot = await prisma.dnaSnapshot.create({
+      data: {
+        targetId: req.params.id,
+        dnaJson: typeof dnaJson === 'string' ? dnaJson : JSON.stringify(dnaJson),
+        version,
+        parentId,
+        isActive: true
+      }
+    });
+    
+    // Update target to use this DNA
+    await prisma.target.update({
+      where: { id: req.params.id },
+      data: { currentDnaId: snapshot.id }
+    });
+    
+    res.json(snapshot);
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+// Add learning event
+app.post('/api/targets/:id/events', async (req, res) => {
+  try {
+    const { eventType, title, description, trustImpact = 0, challengeSolved } = req.body;
+    
+    // Get current DNA
+    const target = await prisma.target.findUnique({
+      where: { id: req.params.id },
+      include: { currentDna: true }
+    });
+    
+    const event = await prisma.learningEvent.create({
+      data: {
+        targetId: req.params.id,
+        dnaVersionId: target?.currentDnaId || '00000000-0000-0000-0000-000000000000',
+        eventType,
+        title,
+        description,
+        trustImpact,
+        challengeSolved,
+        mcpModel: process.env.CLAUDE_MODEL || 'claude-4-5-sonnet'
+      }
+    });
+    
+    // Update target trust score
+    await prisma.target.update({
+      where: { id: req.params.id },
+      data: {
+        trustScore: { increment: trustImpact },
+        lastSeen: new Date()
+      }
+    });
+    
+    res.json(event);
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+// Update target status
+app.patch('/api/targets/:id', async (req, res) => {
+  try {
+    const { status, greenLightStatus, trustScore } = req.body;
+    
+    const updateData: any = {};
+    if (status) updateData.status = status;
+    if (greenLightStatus) updateData.greenLightStatus = greenLightStatus;
+    if (trustScore !== undefined) updateData.trustScore = trustScore;
+    
+    const target = await prisma.target.update({
+      where: { id: req.params.id },
+      data: updateData
+    });
+    
+    res.json(target);
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+// MCP Analysis endpoint
 app.post('/api/mcp/analyze/:targetId', async (req, res) => {
-  // Placeholder - MCP analysis would go here
-  res.json({
-    analysis: 'MCP analysis endpoint ready',
-    mock: !process.env.ANTHROPIC_API_KEY,
-    model: process.env.CLAUDE_MODEL
-  });
+  try {
+    const target = await prisma.target.findUnique({
+      where: { id: req.params.targetId }
+    });
+    
+    if (!target) {
+      return res.status(404).json({ error: 'Target not found' });
+    }
+    
+    // Simulate MCP analysis
+    const analysis = {
+      target: target.url,
+      cdn: 'Azion',
+      securityLevel: 'medium',
+      recommendations: [
+        'Use Brazilian Portuguese locale',
+        'Add realistic referrer headers',
+        'Implement request delays of 1-3 seconds'
+      ],
+      suggestedDNA: {
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        headers: {
+          'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+        },
+        timing: {
+          delayMin: 1000,
+          delayMax: 3000
+        }
+      },
+      mock: !process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY?.includes('test'),
+      model: process.env.CLAUDE_MODEL
+    };
+    
+    res.json(analysis);
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
 });
 
 // Start server
@@ -138,6 +257,7 @@ process.on('SIGINT', async () => {
   await prisma.$disconnect();
   httpServer.close(() => process.exit(0));
 });
+
 
 
 

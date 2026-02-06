@@ -229,6 +229,33 @@ program
     console.log(chalk.green('\n✅ Setup complete! Run "phantom-ai start" to begin.'));
   });
 
+// Crawl command
+program
+  .command('crawl [targetId]')
+  .description('Start autonomous crawl on a target')
+  .option('-u, --url <url>', 'Target URL', 'https://blog.youcom.com.br/')
+  .option('-i, --iterations <n>', 'Max iterations', '50')
+  .action(async (targetId, options) => {
+    if (needsSetup()) {
+      console.log(chalk.yellow('⚠️  Not configured. Run: phantom-ai setup'));
+      return;
+    }
+    
+    const id = targetId || 'd240d6a4-85e8-43b4-9ae9-96b4fc392fc9';
+    console.log(chalk.blue(`\n🎭 Starting autonomous crawl on ${options.url}\n`));
+    console.log(chalk.gray('Proxy chain: Crawler → GOST (1080) → Caido (8080) → Target\n'));
+    
+    // Spawn crawler process
+    const crawlProcess = spawn('npx', ['tsx', 'src/crawler/autonomous.ts', id, options.url], {
+      cwd: process.cwd(),
+      stdio: 'inherit'
+    });
+    
+    crawlProcess.on('close', (code) => {
+      console.log(chalk.blue(`\nCrawl finished with code ${code}`));
+    });
+  });
+
 // Status command
 program
   .command('status')
@@ -255,4 +282,5 @@ if (process.argv.length === 2) {
 } else {
   program.parse();
 }
+
 
