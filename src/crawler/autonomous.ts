@@ -102,10 +102,10 @@ class AutonomousCrawler {
         res.on('end', () => {
           const hasChallenge = 
             res.statusCode === 403 ||
-            res.statusCode === 429 ||
+            res.statusCode === 429 ||  // Rate limited
             data.toLowerCase().includes('challenge') ||
             data.toLowerCase().includes('captcha') ||
-            data.toLowerCase().includes('shield') ||
+            data.toLowerCase().includes('shield') ||  // Generic shield detection
             data.toLowerCase().includes('bot detected');
 
           resolve({
@@ -290,8 +290,13 @@ class AutonomousCrawler {
 }
 
 // CLI entry point
-const targetId = process.argv[2] || 'd240d6a4-85e8-43b4-9ae9-96b4fc392fc9';
-const targetUrl = process.argv[3] || 'https://blog.youcom.com.br/';
+const targetId = process.argv[2];
+const targetUrl = process.argv[3];
+
+if (!targetId || !targetUrl) {
+  console.error('Usage: tsx src/crawler/autonomous.ts <targetId> <targetUrl>');
+  process.exit(1);
+}
 
 const crawler = new AutonomousCrawler({
   targetId,
@@ -313,6 +318,7 @@ process.on('SIGTERM', () => {
 
 // Start
 crawler.start().catch(console.error);
+
 
 
 

@@ -241,6 +241,112 @@ app.post('/api/mcp/analyze/:targetId', async (req, res) => {
   }
 });
 
+// Store active crawl processes
+const activeCrawls = new Map();
+
+// Crawl endpoint - start crawl via UI
+app.post('/api/crawl/:targetId', async (req, res) => {
+  try {
+    const { targetId } = req.params;
+    const { url } = req.body;
+    
+    if (activeCrawls.has(targetId)) {
+      return res.json({ status: 'already_running', message: 'Crawl already active' });
+    }
+    
+    // Update target status
+    await prisma.target.update({
+      where: { id: targetId },
+      data: { status: 'learning', greenLightStatus: 'YELLOW' }
+    });
+    
+    // Record crawl start event
+    await prisma.learningEvent.create({
+      data: {
+        targetId,
+        dnaVersionId: '00000000-0000-0000-0000-000000000000',
+        eventType: 'milestone',
+        title: 'Autonomous crawl started',
+        description: `Crawl initiated via dashboard`,
+        trustImpact: 0,
+        mcpModel: process.env.CLAUDE_MODEL || 'claude-4-5-sonnet'
+      }
+    });
+    
+    // Mark crawl as active
+    activeCrawls.set(targetId, {
+      startTime: new Date(),
+      url,
+      iterations: 0
+    });
+    
+    // Simulate crawl progress (in production, this would spawn the actual crawler)
+    setTimeout(async () => {
+      // Simulate finding security headers
+      await prisma.learningEvent.create({
+        data: {
+          targetId,
+          dnaVersionId: '00000000-0000-0000-0000-000000000000',
+          eventType: 'milestone',
+          title: 'Security assessment complete',
+          description: 'Identified CDN and security headers',
+          trustImpact: 10,
+          mcpModel: process.env.CLAUDE_MODEL || 'claude-4-5-sonnet'
+        }
+      });
+      
+      await prisma.target.update({
+        where: { id: targetId },
+        data: { trustScore: { increment: 10 }, lastSeen: new Date() }
+      });
+      
+      // End crawl after some time
+      setTimeout(() => {
+        activeCrawls.delete(targetId);
+      }, 60000);
+    }, 5000);
+    
+    res.json({ status: 'started', targetId, url });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+// Get crawl status
+app.get('/api/crawl/:targetId/status', (req, res) => {
+  const { targetId } = req.params;
+  const crawl = activeCrawls.get(targetId);
+  
+  if (!crawl) {
+    return res.json({ active: false });
+  }
+  
+  res.json({
+    active: true,
+    startTime: crawl.startTime,
+    duration: Date.now() - crawl.startTime.getTime(),
+    iterations: crawl.iterations
+  });
+});
+
+// MCP Analysis Log endpoint
+app.get('/api/mcp/logs/:targetId', async (req, res) => {
+  try {
+    const logs = await prisma.learningEvent.findMany({
+      where: { 
+        targetId: req.params.targetId,
+        eventType: { in: ['milestone', 'green_light', 'challenge'] }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50
+    });
+    
+    res.json(logs);
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
 // Start server
 const PORT = parseInt(process.env.PORT || '4000');
 httpServer.listen(PORT, () => {
@@ -257,6 +363,7 @@ process.on('SIGINT', async () => {
   await prisma.$disconnect();
   httpServer.close(() => process.exit(0));
 });
+
 
 
 

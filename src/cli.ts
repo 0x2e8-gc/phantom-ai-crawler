@@ -233,7 +233,7 @@ program
 program
   .command('crawl [targetId]')
   .description('Start autonomous crawl on a target')
-  .option('-u, --url <url>', 'Target URL', 'https://blog.youcom.com.br/')
+  .option('-u, --url <url>', 'Target URL', 'https://example.com/')
   .option('-i, --iterations <n>', 'Max iterations', '50')
   .action(async (targetId, options) => {
     if (needsSetup()) {
@@ -241,7 +241,11 @@ program
       return;
     }
     
-    const id = targetId || 'd240d6a4-85e8-43b4-9ae9-96b4fc392fc9';
+    if (!targetId) {
+      console.log(chalk.yellow('⚠️  Target ID required. Usage: phantom-ai crawl <targetId>'));
+      return;
+    }
+    const id = targetId;
     console.log(chalk.blue(`\n🎭 Starting autonomous crawl on ${options.url}\n`));
     console.log(chalk.gray('Proxy chain: Crawler → GOST (1080) → Caido (8080) → Target\n'));
     
@@ -282,5 +286,7 @@ if (process.argv.length === 2) {
 } else {
   program.parse();
 }
+
+
 
 
