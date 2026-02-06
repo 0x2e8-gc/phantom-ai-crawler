@@ -132,7 +132,7 @@ phantom-ai setup   # Reconfigure
 ## 🏗️ Development
 
 ```bash
-git clone https://github.com/0x2e8/phantom-ai.git
+git clone https://github.com/0x2e8-gc/phantom-ai-crawler.git
 cd phantom-ai
 npm install
 npm run dev          # Development mode
@@ -162,4 +162,5 @@ MIT
 ---
 
 Built with 🎭 by 0x2e8
+
 
