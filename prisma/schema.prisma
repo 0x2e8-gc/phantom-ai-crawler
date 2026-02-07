@@ -21,6 +21,12 @@ model Target {
   establishedAt     DateTime?
   maintainedFor     Int       @default(0)
   
+  // Authentication
+  isAuthenticated   Boolean   @default(false)
+  authEndpoint      String?
+  authUsername      String?
+  sessionCookies    String?
+  
   currentDnaId      String?
   currentDna        DnaSnapshot? @relation("CurrentDNA", fields: [currentDnaId], references: [id])
   
@@ -113,4 +119,41 @@ model RequestLog {
   
   @@index([targetId])
 }
+
+model Settings {
+  id                String   @id @default(uuid())
+  key               String   @unique
+  value             String
+  encrypted         Boolean  @default(false)
+  description       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  @@index([key])
+}
+
+model ApiKey {
+  id          String    @id @default(uuid())
+  key         String    @unique
+  name        String    @default("Default API Key")
+  isActive    Boolean   @default(true)
+  lastUsedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  
+  sessions    Session[]
+}
+
+model Session {
+  id          String    @id @default(uuid())
+  token       String    @unique
+  apiKeyId    String
+  apiKey      ApiKey    @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+  
+  @@index([apiKeyId])
+}
+
+
+
 

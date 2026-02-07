@@ -231,32 +231,89 @@ program
 
 // Crawl command
 program
-  .command('crawl [targetId]')
+  .command('crawl <targetId> <url>')
   .description('Start autonomous crawl on a target')
-  .option('-u, --url <url>', 'Target URL', 'https://example.com/')
+  .option('-u, --username <username>', 'Username for authentication')
+  .option('-p, --password <password>', 'Password for authentication')
   .option('-i, --iterations <n>', 'Max iterations', '50')
-  .action(async (targetId, options) => {
+  .action(async (targetId, url, options) => {
     if (needsSetup()) {
       console.log(chalk.yellow('⚠️  Not configured. Run: phantom-ai setup'));
       return;
     }
     
-    if (!targetId) {
-      console.log(chalk.yellow('⚠️  Target ID required. Usage: phantom-ai crawl <targetId>'));
-      return;
-    }
-    const id = targetId;
-    console.log(chalk.blue(`\n🎭 Starting autonomous crawl on ${options.url}\n`));
+    console.log(chalk.blue(`\n🎭 Starting autonomous crawl on ${url}\n`));
     console.log(chalk.gray('Proxy chain: Crawler → GOST (1080) → Caido (8080) → Target\n'));
     
+    const args = ['tsx', 'src/crawler/autonomous.ts', targetId, url];
+    if (options.username) args.push(options.username);
+    if (options.password) args.push(options.password);
+    
     // Spawn crawler process
-    const crawlProcess = spawn('npx', ['tsx', 'src/crawler/autonomous.ts', id, options.url], {
+    const crawlProcess = spawn('npx', args, {
       cwd: process.cwd(),
       stdio: 'inherit'
     });
     
     crawlProcess.on('close', (code) => {
       console.log(chalk.blue(`\nCrawl finished with code ${code}`));
+    });
+  });
+
+// Auth command - authenticate on a target
+program
+  .command('auth <targetId>')
+  .description('Authenticate on a target (requires GREEN light)')
+  .requiredOption('-u, --username <username>', 'Username')
+  .requiredOption('-p, --password <password>', 'Password')
+  .option('--endpoint <endpoint>', 'Login endpoint path (e.g., /login)')
+  .action(async (targetId, options) => {
+    if (needsSetup()) {
+      console.log(chalk.yellow('⚠️  Not configured. Run: phantom-ai setup'));
+      return;
+    }
+    
+    // Check if target has GREEN light
+    const { PrismaClient } = require('@prisma/client');
+    const prisma = new PrismaClient();
+    
+    const target = await prisma.target.findUnique({
+      where: { id: targetId },
+      select: { url: true, greenLightStatus: true, isAuthenticated: true }
+    });
+    
+    if (!target) {
+      console.log(chalk.red('❌ Target not found'));
+      return;
+    }
+    
+    if (target.greenLightStatus !== 'GREEN') {
+      console.log(chalk.yellow(`⚠️  Target must have GREEN light before authentication`));
+      console.log(chalk.gray(`Current status: ${target.greenLightStatus}`));
+      console.log(chalk.gray(`Run: phantom-ai crawl ${targetId} ${target.url}`));
+      return;
+    }
+    
+    if (target.isAuthenticated) {
+      console.log(chalk.yellow('⚠️  Target already authenticated'));
+      return;
+    }
+    
+    console.log(chalk.blue(`\n🔐 Starting authentication on ${target.url}\n`));
+    
+    const args = ['tsx', 'src/crawler/autonomous.ts', targetId, target.url, options.username, options.password];
+    
+    const authProcess = spawn('npx', args, {
+      cwd: process.cwd(),
+      stdio: 'inherit'
+    });
+    
+    authProcess.on('close', (code) => {
+      if (code === 0) {
+        console.log(chalk.green('\n✅ Authentication completed'));
+      } else {
+        console.log(chalk.red('\n❌ Authentication failed'));
+      }
     });
   });
 
@@ -286,6 +343,7 @@ if (process.argv.length === 2) {
 } else {
   program.parse();
 }
+
 
 
 

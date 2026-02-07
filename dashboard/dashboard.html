@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎭 Phantom AI - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Inter', sans-serif; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .glow { box-shadow: 0 0 20px rgba(139, 92, 246, 0.3); }
+        .status-red { background: linear-gradient(135deg, #ef4444, #dc2626); }
+        .status-yellow { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        .status-green { background: linear-gradient(135deg, #10b981, #059669); }
+        .pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <!-- Auth Check -->
+    <div id="auth-check" class="min-h-screen flex items-center justify-center">
+        <div class="text-center">
+            <div class="text-6xl mb-4 animate-pulse">🎭</div>
+            <div class="text-xl text-gray-400">Verificando autenticação...</div>
+        </div>
+    </div>
+
+    <!-- Main Dashboard -->
+    <div id="dashboard" class="hidden max-w-7xl mx-auto p-6">
+        <!-- Header -->
+        <header class="mb-8 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <div class="text-4xl">🎭</div>
+                <div>
+                    <h1 class="text-3xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">Phantom AI</h1>
+                    <p class="text-gray-400 text-sm">Adaptive Web Crawler with MCP</p>
+                </div>
+            </div>
+            <div class="flex gap-4">
+                <div class="bg-gray-800 rounded-lg px-4 py-2 border border-gray-700">
+                    <span class="text-xs text-gray-400">API Status</span>
+                    <div id="api-status" class="flex items-center gap-2">
+                        <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                        <span class="text-sm">Connected</span>
+                    </div>
+                </div>
+                <a href="/settings.html" class="bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg px-4 py-2 transition">⚙️ Settings</a>
+                <button onclick="logout()" class="bg-red-900/50 hover:bg-red-900 border border-red-700 rounded-lg px-4 py-2 transition text-red-400">🚪 Logout</button>
+            </div>
+        </header>
+
+        <!-- Add Target -->
+        <section class="bg-gray-800 rounded-xl p-6 border border-gray-700 mb-6">
+            <h2 class="text-lg font-semibold mb-4">➕ Add Target</h2>
+            <div class="flex gap-4">
+                <input type="url" id="target-url" placeholder="https://example.com" class="flex-1 bg-gray-900 border border-gray-600 rounded-lg px-4 py-2 focus:border-purple-500 focus:outline-none">
+                <select id="target-type" class="bg-gray-900 border border-gray-600 rounded-lg px-4 py-2 focus:border-purple-500 focus:outline-none">
+                    <option value="web">Web</option>
+                    <option value="api">API</option>
+                </select>
+                <button onclick="addTarget()" class="bg-purple-600 hover:bg-purple-700 px-6 py-2 rounded-lg font-medium transition">Add</button>
+            </div>
+        </section>
+
+        <!-- Targets Grid -->
+        <div id="targets-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <!-- Targets will be loaded here -->
+        </div>
+
+        <!-- MCP Analysis Log -->
+        <section class="mt-8 bg-gray-800 rounded-xl p-6 border border-gray-700">
+            <h2 class="text-lg font-semibold mb-4">🧠 MCP Analysis Log</h2>
+            <div id="mcp-logs" class="space-y-2 max-h-64 overflow-y-auto">
+                <div class="text-gray-500 italic">Select a target and click "MCP" to see analysis...</div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Auth Modal for Target -->
+    <div id="auth-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-xl p-6 border border-gray-700 max-w-md w-full mx-4">
+            <h3 class="text-xl font-bold mb-4">🔐 Authenticate</h3>
+            <input type="hidden" id="auth-target-id">
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Username</label>
+                    <input type="text" id="auth-username" class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 focus:border-purple-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Password</label>
+                    <input type="password" id="auth-password" class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 focus:border-purple-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Auth Endpoint (optional)</label>
+                    <input type="text" id="auth-endpoint" placeholder="/login" class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 focus:border-purple-500 focus:outline-none">
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="submitAuth()" class="flex-1 bg-blue-600 hover:bg-blue-700 py-2 rounded-lg font-medium transition">Authenticate</button>
+                    <button onclick="closeAuthModal()" class="px-4 bg-gray-700 hover:bg-gray-600 py-2 rounded-lg transition">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:4000';
+        let activeCrawls = new Set();
+
+        // Verificar autenticação ao carregar
+        async function checkAuth() {
+            const token = localStorage.getItem('phantom_token');
+            if (!token) {
+                window.location.href = '/';
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_URL}/api/targets`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (res.status === 401) {
+                    localStorage.removeItem('phantom_token');
+                    window.location.href = '/';
+                    return;
+                }
+
+                document.getElementById('auth-check').classList.add('hidden');
+                document.getElementById('dashboard').classList.remove('hidden');
+                fetchTargets();
+            } catch (error) {
+                document.getElementById('auth-check').innerHTML = `
+                    <div class="text-red-400 text-xl">❌ API Error</div>
+                    <div class="text-gray-500 text-sm mt-2">${error.message}</div>
+                `;
+            }
+        }
+
+        function getAuthHeaders() {
+            return { 'Authorization': `Bearer ${localStorage.getItem('phantom_token')}` };
+        }
+
+        async function fetchTargets() {
+            try {
+                const res = await fetch(`${API_URL}/api/targets`, {
+                    headers: getAuthHeaders()
+                });
+                const targets = await res.json();
+                renderTargets(targets);
+            } catch (err) {
+                console.error('Failed to fetch targets:', err);
+            }
+        }
+
+        function renderTargets(targets) {
+            const grid = document.getElementById('targets-grid');
+            if (!targets.length) {
+                grid.innerHTML = '<div class="col-span-full text-center text-gray-500 py-12">No targets yet. Add one above!</div>';
+                return;
+            }
+
+            grid.innerHTML = targets.map(t => {
+                const statusColor = t.greenLightStatus === 'GREEN' ? 'status-green' : 
+                                   t.greenLightStatus === 'YELLOW' ? 'status-yellow' : 'status-red';
+                const isCrawling = activeCrawls.has(t.id);
+                const canAuth = t.greenLightStatus === 'GREEN' && !t.isAuthenticated;
+
+                return `
+                <div class="bg-gray-800 rounded-xl p-5 border border-gray-700 hover:border-gray-600 transition">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-2">
+                            <span class="text-lg">${t.type === 'api' ? '🔌' : '🌐'}</span>
+                            <span class="font-medium truncate">${t.url.replace(/^https?:\/\//, '')}</span>
+                        </div>
+                        <div class="w-3 h-3 rounded-full ${statusColor}"></div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <div class="flex justify-between text-sm mb-1">
+                            <span class="text-gray-400">Trust Score</span>
+                            <span class="font-bold ${t.trustScore >= 80 ? 'text-green-400' : t.trustScore >= 50 ? 'text-yellow-400' : 'text-red-400'}">${t.trustScore}%</span>
+                        </div>
+                        <div class="w-full bg-gray-700 rounded-full h-2">
+                            <div class="${statusColor} h-2 rounded-full transition-all" style="width: ${t.trustScore}%"></div>
+                        </div>
+                    </div>
+
+                    ${t.isAuthenticated ? `
+                    <div class="mb-4 p-3 bg-green-900/30 border border-green-700 rounded-lg">
+                        <div class="flex items-center gap-2 text-green-400">
+                            <span>🔐</span>
+                            <span class="font-medium">Session Authenticated</span>
+                        </div>
+                        ${t.authUsername ? `<div class="text-green-300 text-xs mt-1">User: ${t.authUsername}</div>` : ''}
+                    </div>
+                    ` : ''}
+
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="startCrawl('${t.id}', '${t.url}')" ${isCrawling ? 'disabled' : ''}
+                            class="flex-1 min-w-[120px] ${isCrawling ? 'bg-gray-700 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'} text-white py-2 rounded-lg font-medium transition flex items-center justify-center gap-2">
+                            ${isCrawling ? '⏳ Crawling...' : '▶️ Start Crawl'}
+                        </button>
+                        
+                        <button onclick="analyzeTarget('${t.id}')" 
+                            class="flex-1 min-w-[120px] bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-lg font-medium transition">
+                            🧠 MCP
+                        </button>
+                        
+                        ${canAuth ? `
+                        <button onclick="openAuthModal('${t.id}')" 
+                            class="flex-1 min-w-[120px] bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-medium transition flex items-center justify-center gap-2">
+                            🔐 Auth
+                        </button>
+                        ` : ''}
+                        
+                        <button onclick="showDetails('${t.id}')" class="px-4 bg-gray-700 hover:bg-gray-600 rounded-lg transition">👁️</button>
+                    </div>
+
+                    ${isCrawling ? `
+                    <div class="mt-3 p-3 bg-gray-900 rounded-lg mono text-xs">
+                        <div class="flex items-center gap-2 text-green-400 mb-2">
+                            <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                            Crawling via Caido proxy...
+                        </div>
+                    </div>
+                    ` : ''}
+                </div>
+                `;
+            }).join('');
+        }
+
+        async function addTarget() {
+            const url = document.getElementById('target-url').value;
+            const type = document.getElementById('target-type').value;
+            if (!url) return;
+            try {
+                await fetch(`${API_URL}/api/targets`, {
+                    method: 'POST',
+                    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url, type })
+                });
+                document.getElementById('target-url').value = '';
+                fetchTargets();
+            } catch (err) {
+                alert('Failed to add target');
+            }
+        }
+
+        async function startCrawl(targetId, url) {
+            if (activeCrawls.has(targetId)) return;
+            activeCrawls.add(targetId);
+            fetchTargets();
+            
+            try {
+                await fetch(`${API_URL}/api/crawl/${targetId}`, {
+                    method: 'POST',
+                    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+                
+                setTimeout(() => {
+                    activeCrawls.delete(targetId);
+                    fetchTargets();
+                }, 30000);
+            } catch (err) {
+                activeCrawls.delete(targetId);
+                fetchTargets();
+            }
+        }
+
+        function openAuthModal(targetId) {
+            document.getElementById('auth-target-id').value = targetId;
+            document.getElementById('auth-modal').classList.remove('hidden');
+        }
+
+        function closeAuthModal() {
+            document.getElementById('auth-modal').classList.add('hidden');
+        }
+
+        async function submitAuth() {
+            const targetId = document.getElementById('auth-target-id').value;
+            const username = document.getElementById('auth-username').value;
+            const password = document.getElementById('auth-password').value;
+            const endpoint = document.getElementById('auth-endpoint').value;
+            
+            if (!username || !password) {
+                alert('Username and password required');
+                return;
+            }
+
+            closeAuthModal();
+            
+            try {
+                await fetch(`${API_URL}/api/auth/${targetId}`, {
+                    method: 'POST',
+                    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, endpoint })
+                });
+                
+                addMcpLog(targetId, {
+                    title: 'Authentication Initiated',
+                    description: `Authenticating as ${username}...`,
+                    eventType: 'auth'
+                });
+                
+                setTimeout(fetchTargets, 2000);
+            } catch (err) {
+                console.error('Auth failed:', err);
+            }
+        }
+
+        async function analyzeTarget(targetId) {
+            try {
+                const res = await fetch(`${API_URL}/api/mcp/analyze/${targetId}`, {
+                    method: 'POST',
+                    headers: getAuthHeaders()
+                });
+                const data = await res.json();
+                addMcpLog(targetId, data);
+            } catch (err) {
+                console.error('MCP analysis failed:', err);
+            }
+        }
+
+        function addMcpLog(targetId, data) {
+            const container = document.getElementById('mcp-logs');
+            if (container.children[0]?.classList.contains('italic')) {
+                container.innerHTML = '';
+            }
+            
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = 'bg-gray-900 rounded-lg p-3 border-l-4 border-purple-500';
+            entry.innerHTML = `
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-purple-400 font-semibold">🧠 MCP Analysis</span>
+                    <span class="text-gray-500 text-xs">${timestamp}</span>
+                </div>
+                <div class="text-gray-300 mb-2">Target: ${data.target || targetId}</div>
+                ${data.cdn ? `<div class="text-gray-400 text-xs mb-1">CDN: ${data.cdn}</div>` : ''}
+                ${data.securityLevel ? `<div class="text-gray-400 text-xs mb-1">Security: ${data.securityLevel}</div>` : ''}
+                ${data.recommendations ? `
+                    <div class="mt-2 text-xs">
+                        <div class="text-gray-500 mb-1">Recommendations:</div>
+                        ${data.recommendations.map(r => `<div class="text-green-400">• ${r}</div>`).join('')}
+                    </div>
+                ` : ''}
+            `;
+            container.insertBefore(entry, container.firstChild);
+        }
+
+        async function showDetails(targetId) {
+            try {
+                const res = await fetch(`${API_URL}/api/targets/${targetId}`, {
+                    headers: getAuthHeaders()
+                });
+                const data = await res.json();
+                alert(`Target: ${data.url}\nTrust: ${data.trustScore}%\nAuth: ${data.isAuthenticated ? '✅ ' + data.authUsername : '❌'}\nEvents: ${data._count?.learningEvents || 0}`);
+            } catch (err) {
+                console.error('Failed to fetch details:', err);
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('phantom_token');
+            window.location.href = '/';
+        }
+
+        // Iniciar
+        checkAuth();
+    </script>
+</body>
+</html>
+

@@ -5,6 +5,7 @@ import { Server } from 'socket.io';
 import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import { resolve } from 'path';
+import { authMiddleware, generateToken, generateApiKey, isFirstTime } from './auth.js';
 
 // Load env
 dotenv.config({ path: resolve(process.cwd(), '.env') });
@@ -25,17 +26,27 @@ export const redis = {
 };
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 
-// Health check
+// Auth middleware
+app.use(authMiddleware);
+
+// ========== PUBLIC ROUTES ==========
+
 app.get('/health', async (req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
+    const firstTime = await isFirstTime();
     res.json({
       status: 'ok',
       timestamp: new Date().toISOString(),
       version: '1.0.0',
+      firstTime,
       mcp: {
         model: process.env.CLAUDE_MODEL || 'not configured',
         configured: !!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_API_KEY?.includes('your-api-key')
@@ -46,13 +57,97 @@ app.get('/health', async (req, res) => {
   }
 });
 
-// Targets API
+app.get('/api/auth/status', async (req, res) => {
+  try {
+    const firstTime = await isFirstTime();
+    const apiKeys = await prisma.apiKey.count({ where: { isActive: true } });
+    res.json({ firstTime, configured: apiKeys > 0, apiKeys });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+app.post('/api/auth/setup', async (req, res) => {
+  try {
+    const firstTime = await isFirstTime();
+    if (!firstTime) {
+      return res.status(403).json({ error: 'Setup already completed. Use /api/auth/login' });
+    }
+
+    const apiKey = generateApiKey();
+    const keyRecord = await prisma.apiKey.create({
+      data: { key: apiKey, name: 'Initial Setup Key' }
+    });
+
+    const token = generateToken();
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 24);
+
+    await prisma.session.create({
+      data: { token, apiKeyId: keyRecord.id, expiresAt }
+    });
+
+    res.json({ message: 'Setup completed successfully', apiKey, token, expiresAt });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { apiKey } = req.body;
+    if (!apiKey) {
+      return res.status(400).json({ error: 'API key required' });
+    }
+
+    const keyRecord = await prisma.apiKey.findUnique({ where: { key: apiKey } });
+
+    if (!keyRecord || !keyRecord.isActive) {
+      return res.status(401).json({ error: 'Invalid or disabled API key' });
+    }
+
+    const token = generateToken();
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 24);
+
+    await prisma.session.create({
+      data: { token, apiKeyId: keyRecord.id, expiresAt }
+    });
+
+    await prisma.apiKey.update({
+      where: { id: keyRecord.id },
+      data: { lastUsedAt: new Date() }
+    });
+
+    res.json({ token, expiresAt, name: keyRecord.name });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+// ========== PROTECTED ROUTES ==========
+
+app.post('/api/auth/logout', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Token required' });
+    }
+
+    const token = authHeader.substring(7);
+    await prisma.session.deleteMany({ where: { token } });
+
+    res.json({ message: 'Logged out successfully' });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+// Targets
 app.get('/api/targets', async (req, res) => {
   try {
     const targets = await prisma.target.findMany({
-      include: {
-        _count: { select: { learningEvents: true, requestLogs: true } }
-      },
+      include: { _count: { select: { learningEvents: true, requestLogs: true } } },
       orderBy: { createdAt: 'desc' }
     });
     res.json(targets);
@@ -67,13 +162,7 @@ app.post('/api/targets', async (req, res) => {
     if (!url) return res.status(400).json({ error: 'URL required' });
     
     const target = await prisma.target.create({
-      data: {
-        url,
-        type,
-        status: 'discovering',
-        greenLightStatus: 'RED',
-        trustScore: 0
-      }
+      data: { url, type, status: 'discovering', greenLightStatus: 'RED', trustScore: 0 }
     });
     res.json(target);
   } catch (error) {
@@ -98,91 +187,9 @@ app.get('/api/targets/:id', async (req, res) => {
   }
 });
 
-// DNA API
-app.get('/api/dna/:targetId/current', async (req, res) => {
-  try {
-    const target = await prisma.target.findUnique({
-      where: { id: req.params.targetId },
-      include: { currentDna: true }
-    });
-    if (!target?.currentDna) return res.json(null);
-    res.json(JSON.parse(target.currentDna.dnaJson));
-  } catch (error) {
-    res.status(500).json({ error: String(error) });
-  }
-});
-
-// Create DNA snapshot
-app.post('/api/targets/:id/dna', async (req, res) => {
-  try {
-    const { dnaJson, version = '1.0.0', parentId } = req.body;
-    
-    const snapshot = await prisma.dnaSnapshot.create({
-      data: {
-        targetId: req.params.id,
-        dnaJson: typeof dnaJson === 'string' ? dnaJson : JSON.stringify(dnaJson),
-        version,
-        parentId,
-        isActive: true
-      }
-    });
-    
-    // Update target to use this DNA
-    await prisma.target.update({
-      where: { id: req.params.id },
-      data: { currentDnaId: snapshot.id }
-    });
-    
-    res.json(snapshot);
-  } catch (error) {
-    res.status(500).json({ error: String(error) });
-  }
-});
-
-// Add learning event
-app.post('/api/targets/:id/events', async (req, res) => {
-  try {
-    const { eventType, title, description, trustImpact = 0, challengeSolved } = req.body;
-    
-    // Get current DNA
-    const target = await prisma.target.findUnique({
-      where: { id: req.params.id },
-      include: { currentDna: true }
-    });
-    
-    const event = await prisma.learningEvent.create({
-      data: {
-        targetId: req.params.id,
-        dnaVersionId: target?.currentDnaId || '00000000-0000-0000-0000-000000000000',
-        eventType,
-        title,
-        description,
-        trustImpact,
-        challengeSolved,
-        mcpModel: process.env.CLAUDE_MODEL || 'claude-4-5-sonnet'
-      }
-    });
-    
-    // Update target trust score
-    await prisma.target.update({
-      where: { id: req.params.id },
-      data: {
-        trustScore: { increment: trustImpact },
-        lastSeen: new Date()
-      }
-    });
-    
-    res.json(event);
-  } catch (error) {
-    res.status(500).json({ error: String(error) });
-  }
-});
-
-// Update target status
 app.patch('/api/targets/:id', async (req, res) => {
   try {
     const { status, greenLightStatus, trustScore } = req.body;
-    
     const updateData: any = {};
     if (status) updateData.status = status;
     if (greenLightStatus) updateData.greenLightStatus = greenLightStatus;
@@ -192,25 +199,18 @@ app.patch('/api/targets/:id', async (req, res) => {
       where: { id: req.params.id },
       data: updateData
     });
-    
     res.json(target);
   } catch (error) {
     res.status(500).json({ error: String(error) });
   }
 });
 
-// MCP Analysis endpoint
+// MCP Analysis
 app.post('/api/mcp/analyze/:targetId', async (req, res) => {
   try {
-    const target = await prisma.target.findUnique({
-      where: { id: req.params.targetId }
-    });
+    const target = await prisma.target.findUnique({ where: { id: req.params.targetId } });
+    if (!target) return res.status(404).json({ error: 'Target not found' });
     
-    if (!target) {
-      return res.status(404).json({ error: 'Target not found' });
-    }
-    
-    // Simulate MCP analysis
     const analysis = {
       target: target.url,
       cdn: 'Azion',
@@ -226,25 +226,20 @@ app.post('/api/mcp/analyze/:targetId', async (req, res) => {
           'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
         },
-        timing: {
-          delayMin: 1000,
-          delayMax: 3000
-        }
+        timing: { delayMin: 1000, delayMax: 3000 }
       },
       mock: !process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY?.includes('test'),
       model: process.env.CLAUDE_MODEL
     };
-    
     res.json(analysis);
   } catch (error) {
     res.status(500).json({ error: String(error) });
   }
 });
 
-// Store active crawl processes
+// Crawl
 const activeCrawls = new Map();
 
-// Crawl endpoint - start crawl via UI
 app.post('/api/crawl/:targetId', async (req, res) => {
   try {
     const { targetId } = req.params;
@@ -254,13 +249,11 @@ app.post('/api/crawl/:targetId', async (req, res) => {
       return res.json({ status: 'already_running', message: 'Crawl already active' });
     }
     
-    // Update target status
     await prisma.target.update({
       where: { id: targetId },
       data: { status: 'learning', greenLightStatus: 'YELLOW' }
     });
     
-    // Record crawl start event
     await prisma.learningEvent.create({
       data: {
         targetId,
@@ -273,16 +266,9 @@ app.post('/api/crawl/:targetId', async (req, res) => {
       }
     });
     
-    // Mark crawl as active
-    activeCrawls.set(targetId, {
-      startTime: new Date(),
-      url,
-      iterations: 0
-    });
+    activeCrawls.set(targetId, { startTime: new Date(), url, iterations: 0 });
     
-    // Simulate crawl progress (in production, this would spawn the actual crawler)
     setTimeout(async () => {
-      // Simulate finding security headers
       await prisma.learningEvent.create({
         data: {
           targetId,
@@ -294,16 +280,11 @@ app.post('/api/crawl/:targetId', async (req, res) => {
           mcpModel: process.env.CLAUDE_MODEL || 'claude-4-5-sonnet'
         }
       });
-      
       await prisma.target.update({
         where: { id: targetId },
         data: { trustScore: { increment: 10 }, lastSeen: new Date() }
       });
-      
-      // End crawl after some time
-      setTimeout(() => {
-        activeCrawls.delete(targetId);
-      }, 60000);
+      setTimeout(() => activeCrawls.delete(targetId), 60000);
     }, 5000);
     
     res.json({ status: 'started', targetId, url });
@@ -312,15 +293,9 @@ app.post('/api/crawl/:targetId', async (req, res) => {
   }
 });
 
-// Get crawl status
 app.get('/api/crawl/:targetId/status', (req, res) => {
-  const { targetId } = req.params;
-  const crawl = activeCrawls.get(targetId);
-  
-  if (!crawl) {
-    return res.json({ active: false });
-  }
-  
+  const crawl = activeCrawls.get(req.params.targetId);
+  if (!crawl) return res.json({ active: false });
   res.json({
     active: true,
     startTime: crawl.startTime,
@@ -329,7 +304,7 @@ app.get('/api/crawl/:targetId/status', (req, res) => {
   });
 });
 
-// MCP Analysis Log endpoint
+// MCP Logs
 app.get('/api/mcp/logs/:targetId', async (req, res) => {
   try {
     const logs = await prisma.learningEvent.findMany({
@@ -340,8 +315,96 @@ app.get('/api/mcp/logs/:targetId', async (req, res) => {
       orderBy: { createdAt: 'desc' },
       take: 50
     });
-    
     res.json(logs);
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+// Target Auth
+app.post('/api/auth/:targetId', async (req, res) => {
+  try {
+    const { username, password, endpoint } = req.body;
+    const targetId = req.params.targetId;
+    
+    const target = await prisma.target.findUnique({
+      where: { id: targetId },
+      select: { url: true, greenLightStatus: true, isAuthenticated: true }
+    });
+    
+    if (!target) return res.status(404).json({ error: 'Target not found' });
+    if (target.greenLightStatus !== 'GREEN') return res.status(400).json({ error: 'Target must have GREEN light' });
+    if (target.isAuthenticated) return res.status(400).json({ error: 'Target already authenticated' });
+    
+    res.json({ status: 'started', targetId, username });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+// Settings
+app.get('/api/settings', async (req, res) => {
+  try {
+    const settings = await prisma.settings.findMany({
+      select: { key: true, value: true, description: true, updatedAt: true }
+    });
+    const config: any = {};
+    for (const s of settings) config[s.key] = s.value;
+    res.json(config);
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+app.post('/api/settings', async (req, res) => {
+  try {
+    const updates = req.body;
+    for (const [key, value] of Object.entries(updates)) {
+      const encrypted = key.toLowerCase().includes('key') || key.toLowerCase().includes('password');
+      await prisma.settings.upsert({
+        where: { key },
+        update: { value: String(value), encrypted },
+        create: { key, value: String(value), encrypted }
+      });
+    }
+    res.json({ status: 'saved', count: Object.keys(updates).length });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+// Caido
+app.get('/api/caido/status', async (req, res) => {
+  try {
+    const apiKey = await prisma.settings.findUnique({ where: { key: 'caidoGraphqlApiKey' } });
+    res.json({ configured: !!apiKey?.value, hasKey: apiKey?.value ? true : false });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+app.get('/api/caido/requests', async (req, res) => {
+  try {
+    const { caidoClient } = await import('../caido/client.js');
+    const configured = await caidoClient.initialize();
+    if (!configured) return res.status(400).json({ error: 'Caido GraphQL not configured' });
+    const limit = parseInt(req.query.limit as string) || 20;
+    const data = await caidoClient.getRequests(limit);
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+app.get('/api/caido/requests/:host', async (req, res) => {
+  try {
+    const { caidoClient } = await import('../caido/client.js');
+    const configured = await caidoClient.initialize();
+    if (!configured) return res.status(400).json({ error: 'Caido GraphQL not configured' });
+    const { host } = req.params;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const data = await caidoClient.getRequestsByHost(host, limit);
+    res.json(data);
   } catch (error) {
     res.status(500).json({ error: String(error) });
   }
@@ -350,7 +413,7 @@ app.get('/api/mcp/logs/:targetId', async (req, res) => {
 // Start server
 const PORT = parseInt(process.env.PORT || '4000');
 httpServer.listen(PORT, () => {
-  console.log(`🚀 Backend running on port ${PORT}`);
+  console.log(`Backend running on port ${PORT}`);
 });
 
 // Graceful shutdown
@@ -363,8 +426,4 @@ process.on('SIGINT', async () => {
   await prisma.$disconnect();
   httpServer.close(() => process.exit(0));
 });
-
-
-
-
 
