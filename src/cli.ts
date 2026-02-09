@@ -35,6 +35,19 @@ UI_PORT=8081
     console.log(chalk.green('✅ Created .env file'));
   }
   
+  // Generate Prisma client if needed
+  const prismaClientPath = join(PACKAGE_DIR, 'node_modules/.prisma/client');
+  if (!existsSync(prismaClientPath)) {
+    console.log(chalk.blue('📦 Generating Prisma client...'));
+    try {
+      process.chdir(PACKAGE_DIR);
+      execSync('npx prisma generate', { stdio: 'pipe' });
+      console.log(chalk.green('✅ Prisma client generated'));
+    } catch (e) {
+      console.log(chalk.yellow('⚠️  Prisma generate failed, trying migrate...'));
+    }
+  }
+  
   // Initialize database if needed
   if (!existsSync(DB_PATH)) {
     console.log(chalk.blue('📦 Initializing database...'));
@@ -188,4 +201,5 @@ if (process.argv.length === 2) {
 } else {
   program.parse();
 }
+
 
