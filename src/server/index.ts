@@ -80,8 +80,7 @@ app.post('/api/auth/setup', async (req, res) => {
     });
 
     const token = generateToken();
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 30);
+    const expiresAt = new Date("2099-12-31"); // Token permanente
 
     await prisma.session.create({
       data: { token, apiKeyId: keyRecord.id, expiresAt }
@@ -107,8 +106,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     const token = generateToken();
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 30);
+    const expiresAt = new Date("2099-12-31"); // Token permanente
 
     await prisma.session.create({
       data: { token, apiKeyId: keyRecord.id, expiresAt }
@@ -410,6 +408,69 @@ app.get('/api/caido/requests/:host', async (req, res) => {
   }
 });
 
+
+// Test endpoints
+app.get('/api/test/anthropic', async (req, res) => {
+  try {
+    const settings = await prisma.settings.findUnique({ where: { key: 'anthropicApiKey' } });
+    if (!settings?.value || settings.value.includes('your-api-key')) {
+      return res.json({ success: false, error: 'API key not configured' });
+    }
+    
+    const Anthropic = await import('@anthropic-ai/sdk');
+    const client = new Anthropic.default({ apiKey: settings.value });
+    
+    const response = await client.messages.create({
+      model: 'claude-3-haiku-20240307',
+      max_tokens: 10,
+      messages: [{ role: 'user', content: 'Hi' }]
+    });
+    
+    res.json({ 
+      success: true, 
+      message: 'Connected to Anthropic API',
+      model: response.model
+    });
+  } catch (error: any) {
+    res.json({ 
+      success: false, 
+      error: error.message || 'Failed to connect to Anthropic API'
+    });
+  }
+});
+
+app.get('/api/test/caido', async (req, res) => {
+  try {
+    const { caidoClient } = await import('../caido/client.js');
+    const configured = await caidoClient.initialize();
+    
+    if (!configured) {
+      return res.json({ 
+        success: false, 
+        error: 'Caido GraphQL not configured. Check API key and URL in settings.'
+      });
+    }
+    
+    try {
+      const requests = await caidoClient.getRequests(1);
+      res.json({ 
+        success: true, 
+        message: 'Connected to Caido GraphQL',
+        requestsCount: requests.requests?.length || 0
+      });
+    } catch (graphqlError: any) {
+      res.json({ 
+        success: false, 
+        error: 'GraphQL connection failed: ' + (graphqlError.message || 'Unknown error')
+      });
+    }
+  } catch (error: any) {
+    res.json({ 
+      success: false, 
+      error: error.message || 'Failed to connect to Caido'
+    });
+  }
+});
 
 // Test endpoints
 app.get('/api/test/anthropic', async (req, res) => {
