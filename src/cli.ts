@@ -22,7 +22,7 @@ const DASHBOARD_DIR = join(PACKAGE_DIR, 'dashboard');
 
 // Auto-setup for global installs
 async function ensureSetup() {
-  // Create .env if doesn't exist
+  // Create .env if doesn't exist (for local installs)
   if (!existsSync(ENV_PATH)) {
     console.log(chalk.yellow('⚙️  First time setup...\n'));
     const envContent = `DATABASE_URL="file:${DB_PATH}"
@@ -35,29 +35,11 @@ UI_PORT=8081
     console.log(chalk.green('✅ Created .env file'));
   }
   
-  // Generate Prisma client if needed
-  const prismaClientPath = join(PACKAGE_DIR, 'node_modules/.prisma/client');
-  if (!existsSync(prismaClientPath)) {
-    console.log(chalk.blue('📦 Generating Prisma client...'));
-    try {
-      process.chdir(PACKAGE_DIR);
-      execSync('npx prisma generate', { stdio: 'pipe' });
-      console.log(chalk.green('✅ Prisma client generated'));
-    } catch (e) {
-      console.log(chalk.yellow('⚠️  Prisma generate failed, trying migrate...'));
-    }
-  }
-  
-  // Initialize database if needed
+  // Check if database exists
   if (!existsSync(DB_PATH)) {
-    console.log(chalk.blue('📦 Initializing database...'));
-    try {
-      process.chdir(PACKAGE_DIR);
-      execSync('npx prisma migrate deploy', { stdio: 'pipe' });
-      console.log(chalk.green('✅ Database initialized'));
-    } catch (e) {
-      console.log(chalk.yellow('⚠️  Database may already be initialized'));
-    }
+    console.log(chalk.red('❌ Database not found at:'), DB_PATH);
+    console.log(chalk.yellow('Please run: npx prisma migrate deploy'));
+    process.exit(1);
   }
 }
 
@@ -201,5 +183,6 @@ if (process.argv.length === 2) {
 } else {
   program.parse();
 }
+
 
 

@@ -59,6 +59,7 @@
     "dashboard/",
     "prisma/",
     "scripts/",
+    "phantom.db",
     "README.md"
   ],
   "repository": {
@@ -66,3 +67,4 @@
     "url": "https://github.com/0x2e8-gc/phantom-ai-crawler.git"
   }
 }
+

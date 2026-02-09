@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
@@ -8,7 +7,6 @@ const packageDir = __dirname.replace('/scripts', '').replace('\\scripts', '');
 const envPath = path.join(packageDir, '.env');
 
 console.log('🔧 Phantom AI - Post Install Setup');
-console.log('📦 Package directory:', packageDir);
 
 // Criar .env se não existir
 if (!fs.existsSync(envPath)) {
@@ -22,16 +20,8 @@ UI_PORT=8081
 `;
   fs.writeFileSync(envPath, envContent);
   console.log('✅ Created .env file');
-}
-
-// Tentar gerar Prisma client (não falhar se não conseguir)
-console.log('\n📦 Generating Prisma client...');
-try {
-  process.chdir(packageDir);
-  execSync('npx prisma generate', { stdio: 'inherit' });
-  console.log('✅ Prisma client generated');
-} catch (error) {
-  console.log('⚠️  Prisma generate skipped (will run on first start)');
+} else {
+  console.log('✅ .env file already exists');
 }
 
 console.log('\n✅ Phantom AI is ready!');
