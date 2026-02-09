@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
@@ -22,6 +23,16 @@ UI_PORT=8081
   console.log('✅ Created .env file');
 } else {
   console.log('✅ .env file already exists');
+}
+
+// Gerar Prisma Client
+console.log('📦 Generating Prisma client...');
+try {
+  process.chdir(packageDir);
+  execSync('npx prisma generate', { stdio: 'inherit' });
+  console.log('✅ Prisma client generated');
+} catch (error) {
+  console.log('⚠️  Prisma generate warning (can be ignored)');
 }
 
 console.log('\n✅ Phantom AI is ready!');
