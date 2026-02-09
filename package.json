@@ -1,6 +1,6 @@
 {
   "name": "@0x2e8/phantom-ai-crawler",
-  "version": "1.1.7",
+  "version": "1.1.8",
   "description": "Adaptive AI-powered web crawler with behavioral mutation engine",
   "main": "dist/cli.js",
   "bin": {
