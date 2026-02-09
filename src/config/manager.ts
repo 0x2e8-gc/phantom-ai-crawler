@@ -2,6 +2,7 @@ import { prisma } from '../server/index.js';
 
 export interface AppConfig {
   // Caido
+  caidoGraphqlUrl: string;
   caidoGraphqlApiKey: string;
   caidoProxyHost: string;
   caidoProxyPort: number;
@@ -23,6 +24,7 @@ export interface AppConfig {
 }
 
 const DEFAULT_CONFIG: Partial<AppConfig> = {
+  caidoGraphqlUrl: 'http://127.0.0.1:8080/graphql',
   caidoProxyHost: '127.0.0.1',
   caidoProxyPort: 8080,
   claudeModel: 'claude-4-5-sonnet-20250929',
@@ -99,4 +101,6 @@ export class ConfigManager {
 }
 
 export const configManager = new ConfigManager();
+
+
 

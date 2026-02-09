@@ -53,21 +53,13 @@
                 </div>
 
                 <div>
-                    <label class="block text-sm text-gray-400 mb-2">Caido HTTP Proxy URL</label>
-                    <input type="text" id="caido-http-proxy" 
-                        class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2 input-focus focus:outline-none mono text-sm"
-                        value="http://127.0.0.1:8080">
-                    <p class="text-xs text-gray-500 mt-1">URL do proxy Caido para consulta GraphQL</p>
-                </div>
-            </div>
-        </section>
+                    <label class="block text-sm text-gray-400 mb-2">GraphQL Endpoint URL</label>
+                    <input type="text" id="caido-graphql-url" 
+                        class="w-full bg-gray-9
 
-        <!-- Proxy Configuration -->
-        <section class="bg-gray-800 rounded-xl p-6 border border-gray-700 mb-6">
-            <div class="flex items-center gap-3 mb-6">
-                <div class="text-2xl">🌐</div>
-                <div>
-                    <h2 class="text-xl font-semibold">Proxy de Saída</h2>
+[... OUTPUT TRUNCATED - middle content removed to fit context limits ...]
+
+>
                     <p class="text-gray-400 text-sm">Onde o tráfego do Phantom AI sai (GOST)</p>
                 </div>
             </div>
@@ -175,6 +167,7 @@
                 const settings = await res.json();
 
                 if (settings.caidoGraphqlApiKey) document.getElementById('caido-api-key').value = settings.caidoGraphqlApiKey;
+                if (settings.caidoGraphqlUrl) document.getElementById('caido-graphql-url').value = settings.caidoGraphqlUrl;
                 if (settings.caidoHttpProxy) document.getElementById('caido-http-proxy').value = settings.caidoHttpProxy;
                 if (settings.proxyUrl) document.getElementById('proxy-url').value = settings.proxyUrl;
                 if (settings.proxyEnabled !== undefined) document.getElementById('proxy-enabled').checked = settings.proxyEnabled === 'true';
@@ -206,6 +199,7 @@
         async function saveSettings() {
             const settings = {
                 caidoGraphqlApiKey: document.getElementById('caido-api-key').value,
+                caidoGraphqlUrl: document.getElementById('caido-graphql-url').value,
                 caidoHttpProxy: document.getElementById('caido-http-proxy').value,
                 proxyUrl: document.getElementById('proxy-url').value,
                 proxyEnabled: document.getElementById('proxy-enabled').checked.toString(),
@@ -263,4 +257,7 @@
     </script>
 </body>
 </html>
+
+
+
 

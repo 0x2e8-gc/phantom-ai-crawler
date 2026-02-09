@@ -1,25 +1,40 @@
 import { GraphQLClient, gql } from 'graphql-request';
 import { prisma } from '../server/index.js';
 
-const CAIDO_GRAPHQL_URL = 'https://graphql.caido.io/';
+const DEFAULT_CAIDO_URL = 'http://127.0.0.1:8080/graphql';
 
 export class CaidoClient {
   private client: GraphQLClient | null = null;
   private apiKey: string | null = null;
+  private graphqlUrl: string = DEFAULT_CAIDO_URL;
 
   async initialize() {
-    const settings = await prisma.settings.findUnique({
+    // Buscar API Key
+    const apiKeySetting = await prisma.settings.findUnique({
       where: { key: 'caidoGraphqlApiKey' }
     });
     
-    if (settings?.value) {
-      this.apiKey = settings.value;
-      this.client = new GraphQLClient(CAIDO_GRAPHQL_URL, {
+    // Buscar URL customizada (opcional)
+    const urlSetting = await prisma.settings.findUnique({
+      where: { key: 'caidoGraphqlUrl' }
+    });
+    
+    if (apiKeySetting?.value) {
+      this.apiKey = apiKeySetting.value;
+      this.graphqlUrl = urlSetting?.value || DEFAULT_CAIDO_URL;
+      
+      // Garantir que a URL termina com /graphql
+      if (!this.graphqlUrl.includes('/graphql')) {
+        this.graphqlUrl = this.graphqlUrl.replace(/\/$/, '') + '/graphql';
+      }
+      
+      this.client = new GraphQLClient(this.graphqlUrl, {
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
         },
       });
+      console.log(`[Caido] Connected to: ${this.graphqlUrl}`);
       return true;
     }
     return false;
@@ -128,5 +143,6 @@ export class CaidoClient {
 }
 
 export const caidoClient = new CaidoClient();
+
 
 
