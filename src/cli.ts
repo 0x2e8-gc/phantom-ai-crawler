@@ -1,9 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import inquirer from 'inquirer';
 import chalk from 'chalk';
-import ora from 'ora';
 import { spawn, execSync } from 'child_process';
 import { existsSync, writeFileSync, readFileSync } from 'fs';
 import { resolve, join } from 'path';
@@ -11,8 +9,44 @@ import { resolve, join } from 'path';
 const program = new Command();
 const pkg = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf8'));
 
-const ENV_PATH = resolve(process.cwd(), '.env');
-const DASHBOARD_DIR = join(__dirname, '../dashboard');
+// Detect if running from global install
+const PACKAGE_DIR = join(__dirname, '..');
+const isGlobalInstall = PACKAGE_DIR.includes('node_modules/@0x2e8/phantom-ai-crawler') || 
+                        PACKAGE_DIR.includes('/usr/local/lib/node_modules');
+
+// Use package dir for global installs, cwd for local
+const DATA_DIR = isGlobalInstall ? PACKAGE_DIR : process.cwd();
+const ENV_PATH = resolve(DATA_DIR, '.env');
+const DB_PATH = resolve(DATA_DIR, 'phantom.db');
+const DASHBOARD_DIR = join(PACKAGE_DIR, 'dashboard');
+
+// Auto-setup for global installs
+async function ensureSetup() {
+  // Create .env if doesn't exist
+  if (!existsSync(ENV_PATH)) {
+    console.log(chalk.yellow('⚙️  First time setup...\n'));
+    const envContent = `DATABASE_URL="file:${DB_PATH}"
+ANTHROPIC_API_KEY=your-api-key-here
+CLAUDE_MODEL=claude-4-5-sonnet-20250929
+PORT=4000
+UI_PORT=8081
+`;
+    writeFileSync(ENV_PATH, envContent);
+    console.log(chalk.green('✅ Created .env file'));
+  }
+  
+  // Initialize database if needed
+  if (!existsSync(DB_PATH)) {
+    console.log(chalk.blue('📦 Initializing database...'));
+    try {
+      process.chdir(PACKAGE_DIR);
+      execSync('npx prisma migrate deploy', { stdio: 'pipe' });
+      console.log(chalk.green('✅ Database initialized'));
+    } catch (e) {
+      console.log(chalk.yellow('⚠️  Database may already be initialized'));
+    }
+  }
+}
 
 // Banner
 console.log(chalk.magenta(`
@@ -33,94 +67,13 @@ function needsSetup(): boolean {
   return !env.includes('ANTHROPIC_API_KEY') || env.includes('your-api-key-here');
 }
 
-// Setup wizard
-async function setupWizard() {
-  console.log(chalk.yellow('⚙️  Initial Setup Required\n'));
-  
-  const answers = await inquirer.prompt([
-    {
-      type: 'input',
-      name: 'apiKey',
-      message: chalk.cyan('🔑 Enter your Anthropic API Key:'),
-      validate: (input: string) => {
-        if (!input.startsWith('sk-ant-api')) {
-          return 'Please enter a valid Anthropic API key (starts with sk-ant-api)';
-        }
-        return true;
-      }
-    },
-    {
-      type: 'list',
-      name: 'model',
-      message: chalk.cyan('🧠 Select Claude Model:'),
-      choices: [
-        { name: 'Claude 4.5 Sonnet (Recommended)', value: 'claude-4-5-sonnet-20250929' },
-        { name: 'Claude 4.5 Sonnet Latest', value: 'claude-4-5-sonnet-latest' },
-        { name: 'Claude 4 Opus', value: 'claude-4-opus-20251001' }
-      ],
-      default: 'claude-4-5-sonnet-20250929'
-    },
-    {
-      type: 'input',
-      name: 'apiPort',
-      message: chalk.cyan('🔌 Backend Port:'),
-      default: '4000',
-      validate: (input: string) => !isNaN(parseInt(input)) || 'Please enter a valid port number'
-    },
-    {
-      type: 'input',
-      name: 'uiPort',
-      message: chalk.cyan('🌐 Dashboard Port:'),
-      default: '8081',
-      validate: (input: string) => !isNaN(parseInt(input)) || 'Please enter a valid port number'
-    }
-  ]);
-
-  const envContent = `# Phantom AI Configuration
-# Generated: ${new Date().toISOString()}
-
-ANTHROPIC_API_KEY="${answers.apiKey}"
-CLAUDE_MODEL="${answers.model}"
-MCP_MAX_TOKENS=8192
-MCP_TEMPERATURE=0.2
-
-PORT=${answers.apiPort}
-NODE_ENV=development
-
-NEXT_PUBLIC_API_URL="http://localhost:${answers.apiPort}"
-NEXT_PUBLIC_WS_URL="http://localhost:${answers.apiPort}"
-UI_PORT=${answers.uiPort}
-
-DATABASE_URL="file:${process.cwd()}/phantom.db"
-
-JWT_SECRET="${Math.random().toString(36).substring(2)}${Math.random().toString(36).substring(2)}"
-`;
-
-  writeFileSync(ENV_PATH, envContent);
-  console.log(chalk.green('\n✅ Configuration saved to .env'));
-  
-  // Initialize database
-  const spinner = ora('Initializing database...').start();
-  try {
-    execSync('npx prisma migrate deploy', { 
-      cwd: process.cwd(),
-      stdio: 'pipe'
-    });
-    spinner.succeed('Database initialized');
-  } catch (e) {
-    spinner.warn('Database may already be initialized');
-  }
-  
-  return answers;
-}
-
 // Start backend
 async function startBackend(port: string): Promise<ReturnType<typeof spawn>> {
   return new Promise((resolve, reject) => {
-    const spinner = ora('Starting backend...').start();
+    console.log(chalk.blue('Starting backend...'));
     
     const backend = spawn('node', [join(__dirname, 'server/index.js')], {
-      cwd: process.cwd(),
+      cwd: DATA_DIR,
       env: { ...process.env, PORT: port },
       detached: false
     });
@@ -128,45 +81,33 @@ async function startBackend(port: string): Promise<ReturnType<typeof spawn>> {
     backend.stdout?.on('data', (data) => {
       const line = data.toString();
       if (line.includes('running on port')) {
-        spinner.succeed(chalk.green(`Backend running on port ${port}`));
+        console.log(chalk.green(`✅ Backend running on port ${port}`));
         resolve(backend);
       }
     });
 
-    backend.stderr?.on('data', (data) => {
-      // Ignore common startup warnings
-    });
-
     setTimeout(() => {
-      spinner.fail('Backend failed to start');
       reject(new Error('Timeout'));
     }, 30000);
   });
 }
 
-// Start frontend with Python (simple and reliable)
+// Start frontend
 async function startFrontend(port: string): Promise<ReturnType<typeof spawn>> {
   return new Promise((resolve, reject) => {
-    const spinner = ora('Starting dashboard...').start();
+    console.log(chalk.blue('Starting dashboard...'));
     
     const frontend = spawn('python3', ['-m', 'http.server', port], {
       cwd: DASHBOARD_DIR,
       detached: false
     });
 
-    // Give it a moment to start
     setTimeout(() => {
-      spinner.succeed(chalk.green(`Dashboard running on port ${port}`));
+      console.log(chalk.green(`✅ Dashboard running on port ${port}`));
       resolve(frontend);
     }, 2000);
 
-    frontend.on('error', (err) => {
-      spinner.fail(`Dashboard failed: ${err.message}`);
-      reject(err);
-    });
-
     setTimeout(() => {
-      spinner.fail('Dashboard failed to start');
       reject(new Error('Timeout'));
     }, 10000);
   });
@@ -179,13 +120,10 @@ program
   .description('Start Phantom AI (backend + dashboard)')
   .option('-p, --port <port>', 'Backend port', '4000')
   .option('-u, --ui-port <port>', 'Dashboard port', '8081')
-  .option('--setup', 'Force setup wizard')
   .action(async (options) => {
     try {
-      // Setup if needed
-      if (options.setup || needsSetup()) {
-        await setupWizard();
-      }
+      // Auto-setup for global installs
+      await ensureSetup();
 
       // Read config
       const env = readFileSync(ENV_PATH, 'utf8');
@@ -225,96 +163,8 @@ program
   .command('setup')
   .description('Run setup wizard')
   .action(async () => {
-    await setupWizard();
+    await ensureSetup();
     console.log(chalk.green('\n✅ Setup complete! Run "phantom-ai start" to begin.'));
-  });
-
-// Crawl command
-program
-  .command('crawl <targetId> <url>')
-  .description('Start autonomous crawl on a target')
-  .option('-u, --username <username>', 'Username for authentication')
-  .option('-p, --password <password>', 'Password for authentication')
-  .option('-i, --iterations <n>', 'Max iterations', '50')
-  .action(async (targetId, url, options) => {
-    if (needsSetup()) {
-      console.log(chalk.yellow('⚠️  Not configured. Run: phantom-ai setup'));
-      return;
-    }
-    
-    console.log(chalk.blue(`\n🎭 Starting autonomous crawl on ${url}\n`));
-    console.log(chalk.gray('Proxy chain: Crawler → GOST (1080) → Caido (8080) → Target\n'));
-    
-    const args = ['tsx', 'src/crawler/autonomous.ts', targetId, url];
-    if (options.username) args.push(options.username);
-    if (options.password) args.push(options.password);
-    
-    // Spawn crawler process
-    const crawlProcess = spawn('npx', args, {
-      cwd: process.cwd(),
-      stdio: 'inherit'
-    });
-    
-    crawlProcess.on('close', (code) => {
-      console.log(chalk.blue(`\nCrawl finished with code ${code}`));
-    });
-  });
-
-// Auth command - authenticate on a target
-program
-  .command('auth <targetId>')
-  .description('Authenticate on a target (requires GREEN light)')
-  .requiredOption('-u, --username <username>', 'Username')
-  .requiredOption('-p, --password <password>', 'Password')
-  .option('--endpoint <endpoint>', 'Login endpoint path (e.g., /login)')
-  .action(async (targetId, options) => {
-    if (needsSetup()) {
-      console.log(chalk.yellow('⚠️  Not configured. Run: phantom-ai setup'));
-      return;
-    }
-    
-    // Check if target has GREEN light
-    const { PrismaClient } = require('@prisma/client');
-    const prisma = new PrismaClient();
-    
-    const target = await prisma.target.findUnique({
-      where: { id: targetId },
-      select: { url: true, greenLightStatus: true, isAuthenticated: true }
-    });
-    
-    if (!target) {
-      console.log(chalk.red('❌ Target not found'));
-      return;
-    }
-    
-    if (target.greenLightStatus !== 'GREEN') {
-      console.log(chalk.yellow(`⚠️  Target must have GREEN light before authentication`));
-      console.log(chalk.gray(`Current status: ${target.greenLightStatus}`));
-      console.log(chalk.gray(`Run: phantom-ai crawl ${targetId} ${target.url}`));
-      return;
-    }
-    
-    if (target.isAuthenticated) {
-      console.log(chalk.yellow('⚠️  Target already authenticated'));
-      return;
-    }
-    
-    console.log(chalk.blue(`\n🔐 Starting authentication on ${target.url}\n`));
-    
-    const args = ['tsx', 'src/crawler/autonomous.ts', targetId, target.url, options.username, options.password];
-    
-    const authProcess = spawn('npx', args, {
-      cwd: process.cwd(),
-      stdio: 'inherit'
-    });
-    
-    authProcess.on('close', (code) => {
-      if (code === 0) {
-        console.log(chalk.green('\n✅ Authentication completed'));
-      } else {
-        console.log(chalk.red('\n❌ Authentication failed'));
-      }
-    });
   });
 
 // Status command
@@ -322,19 +172,14 @@ program
   .command('status')
   .description('Check Phantom AI status')
   .action(async () => {
-    if (needsSetup()) {
-      console.log(chalk.yellow('⚠️  Not configured. Run: phantom-ai setup'));
-      return;
-    }
-    
+    await ensureSetup();
     const env = readFileSync(ENV_PATH, 'utf8');
-    const model = env.match(/CLAUDE_MODEL="([^"]+)"/)?.[1];
     const hasKey = !env.includes('your-api-key-here');
     
     console.log(chalk.blue('\n📊 Configuration Status:\n'));
-    console.log(chalk.white('  API Key:    '), hasKey ? chalk.green('✓ Configured') : chalk.red('✗ Missing'));
-    console.log(chalk.white('  Model:      '), chalk.cyan(model || 'Not set'));
-    console.log(chalk.white('  Database:   '), existsSync('./phantom.db') ? chalk.green('✓ Initialized') : chalk.yellow('Will create on start'));
+    console.log(chalk.white('  API Key:    '), hasKey ? chalk.green('✓ Configured') : chalk.yellow('⚠️  Using default'));
+    console.log(chalk.white('  Database:   '), existsSync(DB_PATH) ? chalk.green('✓ Initialized') : chalk.yellow('Will create on start'));
+    console.log(chalk.white('  Install:    '), isGlobalInstall ? chalk.cyan('Global') : chalk.cyan('Local'));
   });
 
 // Default action
@@ -343,8 +188,4 @@ if (process.argv.length === 2) {
 } else {
   program.parse();
 }
-
-
-
-
 
