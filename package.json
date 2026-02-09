@@ -1,6 +1,6 @@
 {
   "name": "@0x2e8/phantom-ai-crawler",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "Adaptive AI-powered web crawler with behavioral mutation engine",
   "main": "dist/cli.js",
   "bin": {
@@ -67,5 +67,3 @@
     "url": "https://github.com/0x2e8-gc/phantom-ai-crawler.git"
   }
 }
-
-
