@@ -56,29 +56,11 @@
                 <div>
                     <label class="block text-sm text-gray-400 mb-2">GraphQL Endpoint URL</label>
                     <input type="text" id="caido-graphql-url" 
-                        class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2 input-focus focus:outline-none mono text-sm"
-                        placeholder="http://127.0.0.1:8080/graphql"
-                        value="http://127.0.0.1:8080/graphql">
-                    <p class="text-xs text-gray-500 mt-1">URL do endpoint GraphQL do Caido (padrão: http://127.0.0.1:8080/graphql)</p>
-                </div>
+                        class="w-full bg-gray-
 
-                <div>
-                    <label class="block text-sm text-gray-400 mb-2">Caido HTTP Proxy URL</label>
-                    <input type="text" id="caido-http-proxy" 
-                        class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2 input-focus focus:outline-none mono text-sm"
-                        placeholder="http://127.0.0.1:8080">
-                    <p class="text-xs text-gray-500 mt-1">Caido UI → HTTP Proxy (upstream proxy)</p>
-                </div>
-            </div>
-        </section>
+[... OUTPUT TRUNCATED - middle content removed to fit context limits ...]
 
-        <!-- Proxy de Saída -->
-        <section class="bg-gray-800 rounded-xl p-6 border border-gray-700 mb-6">
-            <div class="flex items-center gap-3 mb-6">
-                <div class="text-2xl">🌐</div>
-                <div>
-                    <h2 class="text-xl font-semibold">Proxy de Saída</h2>
-                    <p class="text-gray-400 text-sm">Onde o tráfego do Phantom AI sai (GOST)</p>
+I sai (GOST)</p>
                 </div>
             </div>
 
@@ -251,20 +233,37 @@
 
             const tests = [];
 
-            // Test API
+            // Test Backend API
             try {
-                const r = await fetch(`${API_URL}/health`);
+                const r = await fetch(`${API_URL}/health`, { headers: getAuthHeaders() });
                 tests.push(r.ok ? '✅ Backend API: OK' : '❌ Backend API: Erro');
-            } catch (e) {
+            } catch (e: any) {
                 tests.push('❌ Backend API: ' + e.message);
             }
 
-            // Test Caido Status
+            // Test Anthropic API
             try {
-                const r = await fetch(`${API_URL}/api/caido/status`);
+                const r = await fetch(`${API_URL}/api/test/anthropic`, { headers: getAuthHeaders() });
                 const s = await r.json();
-                tests.push(s.configured ? '✅ Caido GraphQL: Configurado' : '⚠️ Caido GraphQL: Sem API Key');
-            } catch (e) {
+                if (s.success) {
+                    tests.push(`✅ Anthropic API: ${s.message} (${s.model})`);
+                } else {
+                    tests.push(`⚠️ Anthropic API: ${s.error}`);
+                }
+            } catch (e: any) {
+                tests.push('❌ Anthropic API: ' + e.message);
+            }
+
+            // Test Caido GraphQL
+            try {
+                const r = await fetch(`${API_URL}/api/test/caido`, { headers: getAuthHeaders() });
+                const s = await r.json();
+                if (s.success) {
+                    tests.push(`✅ Caido GraphQL: ${s.message} (${s.requestsCount} requests)`);
+                } else {
+                    tests.push(`⚠️ Caido GraphQL: ${s.error}`);
+                }
+            } catch (e: any) {
                 tests.push('❌ Caido GraphQL: ' + e.message);
             }
 
@@ -275,3 +274,4 @@
     </script>
 </body>
 </html>
+
