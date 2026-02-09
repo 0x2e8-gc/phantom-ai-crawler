@@ -45,22 +45,39 @@
                     <label class="block text-sm text-gray-400 mb-2">GraphQL API Key</label>
                     <div class="flex gap-2">
                         <input type="password" id="caido-api-key" 
-                            class="flex-1 bg-gray-900 border border-gray-600 rounded-lg px-4 py-2 input-focus focus:outline-none mono text-sm"
+                            class="flex-1 bg-gray-900 border border-gray-600 rounded-lg px-4 py-2 input-focus focus:outline-none mono text-sm text-white"
                             placeholder="Bearer token">
                         <button onclick="togglePassword('caido-api-key')" class="bg-gray-700 hover:bg-gray-600 px-3 py-2 rounded-lg">👁️</button>
                     </div>
                     <p class="text-xs text-gray-500 mt-1">Caido UI → Settings → GraphQL API</p>
                 </div>
 
-
                 <div>
                     <label class="block text-sm text-gray-400 mb-2">GraphQL Endpoint URL</label>
                     <input type="text" id="caido-graphql-url" 
-                        class="w-full bg-gray-
+                        class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2 input-focus focus:outline-none mono text-sm text-white"
+                        placeholder="http://127.0.0.1:8080/graphql"
+                        value="http://127.0.0.1:8080/graphql">
+                    <p class="text-xs text-gray-500 mt-1">URL do endpoint GraphQL do Caido</p>
+                </div>
 
-[... OUTPUT TRUNCATED - middle content removed to fit context limits ...]
+                <div>
+                    <label class="block text-sm text-gray-400 mb-2">Caido HTTP Proxy (opcional)</label>
+                    <input type="text" id="caido-http-proxy" 
+                        class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2 input-focus focus:outline-none mono text-sm text-white"
+                        placeholder="http://127.0.0.1:8080">
+                    <p class="text-xs text-gray-500 mt-1">Porta HTTP do Caido para proxy (se diferente)</p>
+                </div>
+            </div>
+        </section>
 
-I sai (GOST)</p>
+        <!-- Proxy Section -->
+        <section class="bg-gray-800 rounded-xl p-6 border border-gray-700 mb-6">
+            <div class="flex items-center gap-3 mb-6">
+                <div class="text-2xl">🌐</div>
+                <div>
+                    <h2 class="text-xl font-semibold">Proxy Configuration</h2>
+                    <p class="text-gray-400 text-sm">GOST → Caido forwarding</p>
                 </div>
             </div>
 
@@ -75,7 +92,8 @@ I sai (GOST)</p>
                 <div>
                     <label class="block text-sm text-gray-400 mb-2">Proxy URL</label>
                     <input type="text" id="proxy-url" 
-                        class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2 input-focus focus:outline-none mono text-sm"
+                        class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2 input-focus focus:outline-none mono text-sm text-white"
+                        placeholder="socks5://127.0.0.1:1080"
                         value="socks5://127.0.0.1:1080">
                     <p class="text-xs text-gray-500 mt-1">Formato: socks5://host:port ou http://host:port (GOST → Caido)</p>
                 </div>
@@ -97,7 +115,7 @@ I sai (GOST)</p>
                     <label class="block text-sm text-gray-400 mb-2">Anthropic API Key</label>
                     <div class="flex gap-2">
                         <input type="password" id="anthropic-api-key" 
-                            class="flex-1 bg-gray-900 border border-gray-600 rounded-lg px-4 py-2 input-focus focus:outline-none mono text-sm"
+                            class="flex-1 bg-gray-900 border border-gray-600 rounded-lg px-4 py-2 input-focus focus:outline-none mono text-sm text-white"
                             placeholder="sk-ant-api03-...">
                         <button onclick="togglePassword('anthropic-api-key')" class="bg-gray-700 hover:bg-gray-600 px-3 py-2 rounded-lg">👁️</button>
                     </div>
@@ -105,7 +123,7 @@ I sai (GOST)</p>
 
                 <div>
                     <label class="block text-sm text-gray-400 mb-2">Claude Model</label>
-                    <select id="claude-model" class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2 focus:outline-none">
+                    <select id="claude-model" class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2 focus:outline-none text-white">
                         <option value="claude-4-5-sonnet-20250929">Claude 4.5 Sonnet (Required)</option>
                         <option value="claude-4-5-sonnet-latest">Claude 4.5 Sonnet (Latest)</option>
                     </select>
@@ -118,7 +136,7 @@ I sai (GOST)</p>
             <button onclick="saveSettings()" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg font-medium transition">
                 💾 Salvar Configurações
             </button>
-            <button onclick="testConnection()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-medium transition">
+            <button onclick="testConnection()" id="test-btn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-medium transition">
                 🔌 Testar Conexões
             </button>
             <button onclick="loadSettings()" class="px-6 bg-gray-700 hover:bg-gray-600 text-white py-3 rounded-lg font-medium transition">
@@ -228,8 +246,13 @@ I sai (GOST)</p>
         async function testConnection() {
             const results = document.getElementById('test-results');
             const content = document.getElementById('test-content');
+            const btn = document.getElementById('test-btn');
+            
+            // Mostrar loading
             results.classList.remove('hidden');
-            content.innerHTML = '<div class="text-yellow-400">Testando conexões...</div>';
+            content.innerHTML = '<div class="text-yellow-400 animate-pulse">⏳ Testando conexões...</div>';
+            btn.disabled = true;
+            btn.textContent = '⏳ Testando...';
 
             const tests = [];
 
@@ -237,7 +260,7 @@ I sai (GOST)</p>
             try {
                 const r = await fetch(`${API_URL}/health`, { headers: getAuthHeaders() });
                 tests.push(r.ok ? '✅ Backend API: OK' : '❌ Backend API: Erro');
-            } catch (e: any) {
+            } catch (e) {
                 tests.push('❌ Backend API: ' + e.message);
             }
 
@@ -250,7 +273,7 @@ I sai (GOST)</p>
                 } else {
                     tests.push(`⚠️ Anthropic API: ${s.error}`);
                 }
-            } catch (e: any) {
+            } catch (e) {
                 tests.push('❌ Anthropic API: ' + e.message);
             }
 
@@ -263,11 +286,15 @@ I sai (GOST)</p>
                 } else {
                     tests.push(`⚠️ Caido GraphQL: ${s.error}`);
                 }
-            } catch (e: any) {
+            } catch (e) {
                 tests.push('❌ Caido GraphQL: ' + e.message);
             }
 
-            content.innerHTML = tests.map(t => `<div>${t}</div>`).join('');
+            content.innerHTML = tests.map(t => `<div class="py-1">${t}</div>`).join('');
+            
+            // Restaurar botão
+            btn.disabled = false;
+            btn.textContent = '🔌 Testar Conexões';
         }
 
         loadSettings();
